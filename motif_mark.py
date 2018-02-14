@@ -1,7 +1,7 @@
 #! /usr/bin/env python3.6
 
 import argparse
-import cairo
+# import cairo
 import re
 
 
@@ -17,7 +17,7 @@ def get_args():
                         help='input fasta file (path)',
                         type=str)
     parser.add_argument('motifs_file',
-                        type=int,
+                        type=str,
                         help='Specify the k most common seqs.\
                         Default: 10',
                         default=10,
@@ -101,57 +101,76 @@ def motif_patterns(motif_list):
     return motif_match_list
 
 
-def motif_coords(motif, string):
-    'returns all case-insensitive matches of the motif in a string'
-
-    motif_coords_list = []
-
-    # find all case-insensitive matches of the motif in a string
-    m = re.finditer(r'(?i)'+motif, string)
-    for i in m:
-        motif_coords_list.append(str(i.start())+':'+str(i.end()))
-
-    return motif_coords_list
-
-
 class seq_region:
     '''Class for each exon region'''
     def __init__(self, seq):
+
+        # the sequence for each entry
         self.seq = seq
 
-    def exon(self, string):
-
         # initialize lists for coordinates and seq
-        coords = []
-        exon = []
+        self.coords = []
+        self.exon = []
 
         # loop over seq to fill in lists
-        for i, char in enumerate(string):
+        for i, char in enumerate(self.seq):
 
             # exons are uppercase
             if char.isupper():
-                coords.append(i)
-                exon.append(char)
+                self.coords.append(i)
+                self.exon.append(char)
 
-        # return exon sequence
-        self.exon = exon
+        # return exon sequence // might not need this
+        self.exon = ''.join(self.exon)
 
         # return coordinates of exon
-        self.coords = (min(coords), max(coords))
+        self.exon_coord = (min(self.coords), max(self.coords))
 
-    def find_motif_coords(self, motif):
+    def find_motif_coords(self, motif_match):
 
-        motif_coords_list = []
+        self.motif_coords_list = []
 
-        m = re.finditer(r'(?i)'+motif, self.seq)
+        m = re.finditer(r'(?i)'+motif_match, self.seq)
         for i in m:
-            motif_coords_list.append(str(i.start())+':'+str(i.end()))
+            self.motif_coords_list.append(str(i.start())+':'+str(i.end()))
 
-        self.motif_coords_list = motif_coords_list
-
-
-# read in each fasta entry to a dictonary
-region_dct = get_seq_regions(infile)
+        return self.motif_coords_list
 
 
+def main():
+    # read in each fasta entry to a dictonary
+    region_dict = get_seq_regions(infile)
+
+    # get motifs
+    motif_list = get_motif_list(motifile)
+
+    # get regex matches for each motif
+    motif_matches = motif_patterns(motif_list)
+
+    # place to put motif coordinate dicts for each entry
+    gene_motif_dict = {}
+
+    # for each fasta entry make seq_region object from the sequence
+    for entry in region_dict:
+
+        seq_obj = seq_region(region_dict[entry])
+
+        # place to put coordinates for each motif
+        motif_coordinate_dict = {}
+
+        # loop over indexed motif patterns
+        for i, pattern in enumerate(motif_matches):
+
+            # determine coordinates of motif occurances in the sequence
+            motif_coordinate_dict[motif_list[i]] = \
+                                    seq_obj.find_motif_coords(pattern)
+
+            # name them and add data to coordinate dict
+            gene_motif_dict[entry] = motif_coordinate_dict
+
+    return gene_motif_dict
+
+
+if __name__ == main():
+    main()
 
