@@ -24,14 +24,9 @@ def get_args():
                         nargs='?')
     return parser.parse_args()
 
-# grab filename
-infile = get_args().fasta_file
-
-# grab motifile name
-motifile = get_args().motifs_file
-
 
 def get_seq_regions(fastafile):
+    '''returns dict of each exon region with fasta header as key'''
     with open(fastafile, 'r') as fh:
 
         # dict for exon regions
@@ -54,6 +49,7 @@ def get_seq_regions(fastafile):
 
 
 def get_motif_list(motif_file):
+    '''returns list of motifs in the motif file'''
     with open(motif_file, 'r') as mh:
 
         # list to hold motifs of interest
@@ -67,7 +63,7 @@ def get_motif_list(motif_file):
 
 
 def motif_patterns(motif_list):
-    'returns motif regex matches for any IUPAC nucleotide code'
+    '''returns motif regex matches for any IUPAC nucleotide code'''
 
     # list of motif matches
     motif_match_list = []
@@ -103,6 +99,7 @@ def motif_patterns(motif_list):
 
 class seq_region:
     '''Class for each exon region'''
+
     def __init__(self, seq):
 
         # the sequence for each entry
@@ -127,17 +124,26 @@ class seq_region:
         self.exon_coord = (min(self.coords), max(self.coords))
 
     def find_motif_coords(self, motif_match):
+        '''return the start position of each motif'''
 
         self.motif_coords_list = []
 
         m = re.finditer(r'(?i)'+motif_match, self.seq)
         for i in m:
-            self.motif_coords_list.append(str(i.start())+':'+str(i.end()))
+            self.motif_coords_list.append(str(i.start()))
 
         return self.motif_coords_list
 
 
 def main():
+    '''call main script code'''
+
+    # grab filename
+    infile = get_args().fasta_file
+
+    # grab motifile name
+    motifile = get_args().motifs_file
+
     # read in each fasta entry to a dictonary
     region_dict = get_seq_regions(infile)
 
@@ -165,12 +171,15 @@ def main():
             motif_coordinate_dict[motif_list[i]] = \
                                     seq_obj.find_motif_coords(pattern)
 
+            # append seq length to end of header for each entry
+            header = entry+f' {len(seq_obj.seq)}'
+
             # name them and add data to coordinate dict
-            gene_motif_dict[entry] = motif_coordinate_dict
+            gene_motif_dict[header] = motif_coordinate_dict
 
-    return gene_motif_dict
+    return gene_motif_dict, len(gene_motif_dict)
 
 
-if __name__ == main():
-    main()
 
+if __name__ == '__main__':
+    print(main())
