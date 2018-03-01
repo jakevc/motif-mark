@@ -1,13 +1,20 @@
 # motif-mark
 
+TO DO:
+
+ - proper color generation, one per motif in motifs.txt
+ - motif legend
+ - dynamically scale length of image to number of seqs 
+ - test on other sequences
+
+
 
 MBNL and RBFOX regulate splicing in a similar manner, binding both up and downstream the alternatively spliced exon. 
 
 The two factors have similar motifs, and are known to regulate each others binding sites.
 
 
-MBNL1 and RBFOX1 work together to regulate splicing events
-in transcripts that are regulated by both?
+MBNL1 and RBFOX1 work together to regulate splicing events in transcripts that are regulated by both.
 
 
 Develop a Python script to plot protein binding motifs on an image of
