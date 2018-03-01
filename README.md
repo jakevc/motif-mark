@@ -17,7 +17,7 @@ the an exon and flanking introns
 Pycairo,python
 
 Installed using 
-```conda install -c conda-forge pycairo```
+`conda install -c conda-forge pycairo`
 
 Working on the following ![example svg](https://github.com/jakevc/motif-mark/blob/master/example.svg)
 
