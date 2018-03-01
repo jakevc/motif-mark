@@ -1,8 +1,9 @@
 #! /usr/bin/env python3.6
 
 import argparse
-# import cairo
 import re
+import cairo
+import matplotlib.colors as mplc
 
 
 def get_args():
@@ -30,7 +31,7 @@ def get_seq_regions(fastafile):
     with open(fastafile, 'r') as fh:
 
         # dict for exon regions
-        exon_dict = {}
+        region_dict = {}
 
         for line in fh:
             line = line.strip()
@@ -43,9 +44,9 @@ def get_seq_regions(fastafile):
             # seq as values
             elif line[0] != '>':
                 seq += line
-                exon_dict[header] = seq
+                region_dict[header] = seq
 
-    return exon_dict
+    return region_dict
 
 
 def get_motif_list(motif_file):
@@ -121,7 +122,7 @@ class seq_region:
         self.exon = ''.join(self.exon)
 
         # return coordinates of exon
-        self.exon_coord = (min(self.coords), max(self.coords))
+        self.exon_coord = f'{min(self.coords)}:{max(self.coords)}'
 
     def find_motif_coords(self, motif_match):
         '''return the start position of each motif'''
@@ -156,28 +157,178 @@ def main():
     # place to put motif coordinate dicts for each entry
     gene_motif_dict = {}
 
+    exon_coords = []
+
     # for each fasta entry make seq_region object from the sequence
     for entry in region_dict:
 
         seq_obj = seq_region(region_dict[entry])
 
+        exon_coords.append(seq_obj.exon_coord)
+
+        # seq_obj.exon_coord()
+
         # place to put coordinates for each motif
         motif_coordinate_dict = {}
 
+        # list for motif coordinates
+        motif_coordinate_list = []
+
         # loop over indexed motif patterns
         for i, pattern in enumerate(motif_matches):
+
+            motif_coordinate_list.append(seq_obj.find_motif_coords(pattern))
 
             # determine coordinates of motif occurances in the sequence
             motif_coordinate_dict[motif_list[i]] = \
                                     seq_obj.find_motif_coords(pattern)
 
             # append seq length to end of header for each entry
-            header = entry+f' {len(seq_obj.seq)}'
+            header = entry+f'{len(seq_obj.seq)}'
 
             # name them and add data to coordinate dict
             gene_motif_dict[header] = motif_coordinate_dict
 
-    return gene_motif_dict, len(gene_motif_dict)
+    # return gene_motif_dict, exon_coords
+    for k in gene_motif_dict:
+        for key in gene_motif_dict[k]:
+            print(gene_motif_dict[k][key])
+
+    print(motif_coordinate_list)
+
+
+class draw_svg():
+    '''draw class for motif mark svg creation'''
+    def __init__(self, motifs, lengths, exons):
+        self.motifs = motifs
+        self.lengths = lengths
+        self.exons = exons
+
+
+    def setup_surface(self):
+        '''draws a surface for the number of fasta entries'''
+
+        # dimensions
+        n = len(self.exons)
+        self.width = 100 * n
+        self.svg_len = max(self.lengths)
+
+        # surface
+        self.surface = cairo.SVGSurface('example.svg', self.svg_len, self.width)
+        self.context = cairo.Context(self.surface)
+        self.context.scale(300, 300)
+
+        # centers
+        self.centers = []
+        top = 1
+        self.centers.append(top/(n+1))
+
+        while top < n:
+            top += 1
+            self.centers.append(top/(n+1))
+
+        return self.context, self.surface
+
+    def draw_seq_regions(self):
+        # sequence lines across figure
+        for l,c in zip(self.lengths, self.centers):
+            x, x2 = 0, l/self.svg_len
+            y, y2 = c, c
+            self.context.move_to(x, y)
+            self.context.set_line_width(0.01)
+            self.context.line_to(x2, y2)
+
+        return self.context.stroke()
+
+    def draw_exons(self):
+        '''draws exon from a string of coordinates "start:stop"'''
+
+        for seqlen, ecenter, exon in zip(self.lengths, self.centers, self.exons):
+
+            # set exon color as black with mpl function
+            r,g,b,a = mplc.to_rgba('black')
+            self.context.set_source_rgba(r,g,b,a)
+
+            exon = (int(exon.split(':')[0]), int(exon.split(':')[1]))
+
+            # draw rectangle
+            self.context.rectangle(exon[0]/self.svg_len, (ecenter-0.02), (exon[1]-exon[0])/self.svg_len, 0.04)
+
+
+            print(seqlen/self.svg_len)
+
+        return self.context.stroke()
+
+
+    def draw_motifs(self, colors):
+        '''draws motifs of the desired color on the sequence region'''
+
+
+        for mot, col in zip(self.motifs, colors):
+            # use mpl color function to get the color you want
+            r,g,b,a = mplc.to_rgba(col)
+
+            # set that color as the context
+            self.context.set_source_rgba(r,g,b,a)
+
+
+            # for each attribute of each seq region
+            for m, seqlen, center in zip(mot, self.lengths, self.centers):
+
+#                 # use mpl color function to get the color you want
+#                 r,g,b,a = mplc.to_rgba(col)
+
+#                 # set that color as the context
+#                 self.context.set_source_rgba(r,g,b,a)
+
+                print(col)
+
+
+                for pos in m:
+
+#                     # use mpl color function to get the color you want
+#                     r,g,b,a = mplc.to_rgba(col)
+
+#                     # set that color as the context
+#                     self.context.set_source_rgba(r,g,b,a)
+
+                    #get the first coordinate of the motif
+                    motif = int(pos)
+
+                    # scale to svg_len
+                    x = motif/self.svg_len
+
+                    # draw around center line
+                    y = center + 20/self.svg_len
+                    y1 = center - 20/self.svg_len
+
+                    # create line
+                    self.context.move_to(x,y)
+                    self.context.line_to(x,y1)
+
+                    self.context.set_line_width(0.005)
+            self.context.stroke()
+
+
+    def finish_svg(self):
+        # start svg
+        svg = draw_svg(motifs, lengths, exons)
+
+        # setup svg surface
+        svg.setup_surface()
+
+        # draw the scaled regions for each entry
+        svg.draw_seq_regions()
+
+        # draw exons
+        svg.draw_exons()
+
+        svg.draw_motifs(colors)
+
+        svg.draw_motifs
+
+        # finish the surface!
+        return svg.surface.finish()
 
 
 
