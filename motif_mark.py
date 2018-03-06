@@ -14,15 +14,23 @@ def get_args():
         (rbfox, mbnl) binding motifs accross an exon and flanking \
         intron sequences, producing a to scale SVG representation \
         for each exon')
-    parser.add_argument('fasta_file',
+    parser.add_argument('sequences_fasta',
                         help='input fasta file (path)',
                         type=str)
-    parser.add_argument('motifs_file',
+    parser.add_argument('motifs_txt',
+                        help='file of possible motifs',
+                        type=str)
+    parser.add_argument('-o', '--outfile',
+                        help='outfile name',
                         type=str,
-                        help='Specify the k most common seqs.\
-                        Default: 10',
-                        default=10,
-                        nargs='?')
+                        default='motifs.svg',
+                        required=False)
+    parser.add_argument('-c', '--colors',
+                        help='matlab color spec of colors,\
+                        one for each motif. Example: rgb, will show\
+                        three motifs in red, green, and blue',
+                        type=list,
+                        required=True)
     return parser.parse_args()
 
 
@@ -140,10 +148,16 @@ def get_svg_arguments():
     '''call main script code'''
 
     # grab filename
-    infile = get_args().fasta_file
+    infile = get_args().sequences_fasta
 
     # grab motifile name
-    motifile = get_args().motifs_file
+    motifile = get_args().motifs_txt
+
+    # outfile name
+    outfile = get_args().outfile
+
+    # colors
+    colors = get_args().colors
 
     # read in each fasta entry to a dictonary
     region_dict = get_seq_regions(infile)
@@ -177,15 +191,21 @@ def get_svg_arguments():
         motif_entry_coords = []
 
         # loop over indexed motif patterns
-        for  pattern in motif_matches:
+        for pattern in motif_matches:
 
             # tuple of positions for each motif
-            motif_entry_coords.append(tuple(seq_obj.find_motif_coords(pattern)))
+            motif_entry_coords.append(
+                tuple(seq_obj.find_motif_coords(pattern)))
 
         # list of coordinates for each motif, for each entry
         motif_coordinate_list.append(motif_entry_coords)
 
-    return motif_coordinate_list, exon_coords, lengths
+    return (motif_coordinate_list,
+            exon_coords,
+            lengths,
+            motif_list,
+            outfile,
+            colors)
 
 
 class draw_svg():
@@ -194,7 +214,8 @@ class draw_svg():
         self.motifs = motifs
         self.lengths = lengths
         self.exons = exons
-
+        self.outfile = get_svg_arguments()[4]
+        self.colors = get_svg_arguments()[5]
 
     def setup_surface(self):
         '''draws a surface for the number of fasta entries'''
@@ -202,26 +223,27 @@ class draw_svg():
         # dimensions
         n = len(self.exons)
         self.width = 100 * n
+        self.height = (100 * n) + 25 * n
         self.svg_len = max(self.lengths)
 
         # surface
-        self.surface = cairo.SVGSurface('example.svg', self.svg_len, self.width)
+        self.surface = cairo.SVGSurface(self.outfile, 300, self.height)
         self.context = cairo.Context(self.surface)
         self.context.scale(300, 300)
 
         # centers
         self.centers = []
         top = 1
-        self.centers.append(top/(n+1))
+        self.centers.append(top/(n+1) + 0.25)
 
+        # create the right number of centers for sequences
         while top < n:
             top += 1
-            self.centers.append(top/(n+1))
-
+            self.centers.append(top/(n+1) + 0.25)
 
     def draw_seq_regions(self):
         # sequence lines across figure
-        for l,c in zip(self.lengths, self.centers):
+        for l, c in zip(self.lengths, self.centers):
             x, x2 = 0, l/self.svg_len
             y, y2 = c, c
             self.context.move_to(x, y)
@@ -233,40 +255,37 @@ class draw_svg():
     def draw_exons(self):
         '''draws exon from a string of coordinates "start:stop"'''
 
-        for seqlen, ecenter, exon in zip(self.lengths, self.centers, self.exons):
+        for seqlen, ecenter, exon in zip(
+                self.lengths, self.centers, self.exons):
 
             # set exon color as black with mpl function
-            r,g,b,a = mplc.to_rgba('black')
-            self.context.set_source_rgba(r,g,b,a)
+            r, g, b, a = mplc.to_rgba('black')
+            self.context.set_source_rgba(r, g, b, a)
 
-            # draw rectangle
-            self.context.rectangle(exon[0]/self.svg_len, (ecenter-0.02), (exon[1]-exon[0])/self.svg_len, 0.04)
+            # Rectangle(x0, y0, x1, y1)
+            self.context.rectangle(exon[0]/self.svg_len,
+                                   (ecenter-0.02),
+                                   (exon[1]-exon[0])/self.svg_len, 0.04)
 
         self.context.stroke()
 
-
-    def draw_motifs(self, colors):
+    def draw_motifs(self):
         '''draws motifs of the desired color on the sequence region'''
 
         for mot, center in zip(self.motifs, self.centers):
 
             # for each attribute of each seq region
-            for m, seqlen, col in zip(mot, self.lengths, colors):
-
-                print(m)
+            for m, seqlen, col in zip(mot, self.lengths, self.colors):
 
                 # use mpl color function to get the color you want
-                r,g,b,a = mplc.to_rgba(col)
+                r, g, b, a = mplc.to_rgba(col)
 
                 # set that color as the context
-                self.context.set_source_rgba(r,g,b,a)
-
-                print(col)
+                self.context.set_source_rgba(r, g, b, a)
 
                 for pos in m:
 
                     motif = int(pos)
-
 
                     # scale to svg_len
                     x = motif/self.svg_len
@@ -276,15 +295,44 @@ class draw_svg():
                     y1 = center - 20/self.svg_len
 
                     # create line
-                    self.context.move_to(x,y)
-                    self.context.line_to(x,y1)
+                    self.context.move_to(x, y)
+                    self.context.line_to(x, y1)
 
                     self.context.set_line_width(0.005)
 
                     self.context.stroke()
 
+    def draw_legend(self):
 
-    def finish_svg(self, colors):
+        # black legend rectangle
+        self.context.set_source_rgba(0, 0, 0, 1)
+        self.context.set_line_width(0.004)
+        self.context.rectangle(0.004, 0.004, 0.5, 0.25)
+
+        self.context.select_font_face("Sans", cairo.FONT_SLANT_NORMAL,
+                                      cairo.FONT_WEIGHT_BOLD)
+        self.context.set_font_size(0.05)
+
+        # x, y coordinate of text
+        x = (0.5 - 0.004)/4
+        y = 0.05
+        self.context.move_to(x, y)
+        self.context.show_text("Motif Legend")
+        self.context.stroke()
+
+        # get motif text from file
+        motif_txt = get_svg_arguments()[3]
+
+        # draw each motif with its color in the rectangle
+        for i, mtext in enumerate(motif_txt):
+            r, b, g, a = mplc.to_rgba(self.colors[i])
+            self.context.set_source_rgba(r, b, g, a)
+
+            self.context.move_to(x, 0.10 + 0.05*i)
+            self.context.show_text(mtext)
+            self.context.stroke()
+
+    def finish_svg(self):
         # start svg
         svg = draw_svg(self.motifs, self.lengths, self.exons)
 
@@ -297,7 +345,9 @@ class draw_svg():
         # draw exons
         svg.draw_exons()
 
-        svg.draw_motifs(colors)
+        svg.draw_motifs()
+
+        svg.draw_legend()
 
         # finish the surface!
         svg.surface.finish()
@@ -306,12 +356,10 @@ class draw_svg():
 def main():
 
     # get lists for svg_draw
-    motifs, exons, lengths = get_svg_arguments()
-
-    colors = ('r','b','g')
+    motifs, exons, lengths = get_svg_arguments()[0:3]
 
     # draw the svg
-    draw_svg(motifs, lengths, exons).finish_svg(colors)
+    draw_svg(motifs, lengths, exons).finish_svg()
 
 
 if __name__ == '__main__':
