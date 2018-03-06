@@ -17,4 +17,10 @@ The image generated using the provided example files and generated with the foll
 ![example svg](https://github.com/jakevc/motif-mark/blob/master/example.svg)
 
 
+The figure shows three motifs in the legend, and only the red one represented in the sequence, meaning the other two motifs were not found in the sequences.
+
+
+
+
+
 
